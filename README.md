@@ -57,23 +57,30 @@ firewall-cmd --state
 running
 
 - If the above command returns 'not running' then you can start the service using:
+```
 systemctl start firewalld
-
+```
 - Get your default zone
+```
 firewall-cmd --get-default-zone
 public
-
+```
 - Get the list of interfaces part of your active zone
+```
 firewall-cmd --get-active-zones
 public
   interfaces: enp0s3 enp0s8
+```
 
 Next we need Change Network Settings to use “Bridged Adapter”
 After that we are checking if IPS configured statickly or DHCP
 
+```
 nmcli con show
+```
 
 After that we need to restart service 
+
 ```
 nmcli networking off
 nmcli networking on
