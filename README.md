@@ -1,73 +1,105 @@
 # Part 1 – Configure application
 
-1.	Create a service connection in a Azure DevOps project to your subscription - 
-![Savchuk Dmytro](1.png "Service Connection")
+1. На Server_1 налаштувати статичні адреси на всіх інтерфейсах.
+![Savchuk Dmytro](1.jpg "Static addresses")
 
-2.	Find a .net pet project for the experiments
-![Savchuk Dmytro](2.png ".Net project")
+2. На Server_1 налаштувати DHCP сервіс, який буде конфігурувати адреси Int1 Client_1 та Client_2
+![Savchuk Dmytro](2.jpg "DHCP")
 
-3.	Build your app locally .net project via dotnet tool. dotnet restore/build/run
-![Savchuk Dmytro](3.png "Build pipeline")
+3.	 За допомогою команд ping та traceroute перевірити зв'язок між віртуальними машинами. Результат пояснити.
+На скриншоте ниже мы видим что мы можем достучаться с одного сервера на другой с помощью команды ping
 
-4.	Create an Azure DevOps repo You can use import repository to import from existing source control version like github
+On the screenshot below we can see that we can connect from one server to another via ping command
 
-Repo was created in previous screenshot and my .NET project was moved inside in pet-project Repo
+![Savchuk Dmytro](3.jpg "Ping")
 
-5.	Create a branching policy for you application. Added yourself as a reviewer. As branching strategy use a github flow (It will be applied by default when you strict commit to your main branch)
+4.	На віртуальному інтерфейсу lo Client_1 призначити дві ІР адреси за таким правилом: 172.17.D+10.1/24 та 172.17.D+20.1/24. Налаштувати маршрутизацію таким чином, щоб трафік з Client_2 до 172.17.D+10.1 проходив через Server_1, а до 172.17.D+20.1 через Net4. Для перевірки використати traceroute.
 
-Policy was created with reviewer as myself
+My IPs: 
 
-![Savchuk Dmytro](3.png "Branch policy")
+Client_1 IPs: 
+- 172.17.29.1/24
+- 172.17.39.1/24
 
+Client_2 -> Server_1 -> 172.17.29.1
+Client_2 ->   Net4   -> 172.17.39.1
 
-# Part 2 – Configure a pipeline to deploy infrastructure 
+```
+post-up route add -net 172.17.29.0 netmask 255.255.255.0 gw 10.87.19.0 dev enp0s8
 
-1.	Create a separate resource group and deploy azure storage account 
+post-up route add -net 172.17.39.0 netmask 255.255.255.0 gw 10.4.87.0 dev enp0s8
+```
 
-Storage account nad RG were created 
-![Savchuk Dmytro](2.1.png "RG and Storage acc")
+5. Розрахувати спільну адресу та маску (summarizing) адрес 172.17.D+10.1 та 172.17.D+20.1, при чому префікс має бути максимально можливим. Видалити маршрути становлені на попередньому кроці та замінити їх об’єднаним маршрутом, якій має проходити через Server_1.
 
-2.	Create a container with the name “tfstate” and remember the name. use portal settings 
+General IP range is : 
 
-Container and TF state file were created (terraform file created automatically after TF execution)
-![Savchuk Dmytro](2.2.png "Container and state file")
+172.17.0.0/16
 
+```
+post-up route add -net 172.17.0.0 netmask 255.255.255.0 gw 10.87.19.0 dev enp0s8
+```
 
-# Part 2.2 – Create a terraform pipeline
+6. Налаштувати SSH сервіс таким чином, щоб Client_1 та Client_2 могли підключатись до Server_1 та один до одного.
 
-1.	Create a yaml pipeline with the following steps: terraform install, terraform init, terraform plan/apply. Plan is an optional one 
+You need to run next commands 
 
-Pipeline created for terraform execution
-![Savchuk Dmytro](2.3.png "Container and state file")
+```
+systemctl enable ssh --now
+```
 
-2.	Inside yaml pipeline add trigger to main branch. The scenario – when main is updated, pipeline should run automatically
+```
+ dnf install firewalld
+```
 
-Main branch is set up for automation
-![Savchuk Dmytro](2.4.png "Container and state file")
+## Check if firewalld is running
+firewall-cmd --state
+running
 
-3.	Added 3 steps – terraform install, terraform init, terraform plan/apply. Plan is an optional one. You may add it as 4th step
+## If the above command returns 'not running' then you can start the service using:
+systemctl start firewalld
 
-Resources which created by terraform
-![Savchuk Dmytro](2.5.png "Container and state file")
+## Get your default zone
+firewall-cmd --get-default-zone
+public
 
-Terraform manifest
-![Savchuk Dmytro](2.6.png "Container and state file")
+## Get the list of interfaces part of your active zone
+firewall-cmd --get-active-zones
+public
+  interfaces: enp0s3 enp0s8
 
+Next we need Change Network Settings to use “Bridged Adapter”
+After that we are checking if IPS configured statickly or DHCP
 
-# Part 3 – Create a deploy pipeline to app service
+nmcli con show
 
-1.	Add yml pipeline to the application folder
+After that we need to restart service 
+```
+nmcli networking off
+nmcli networking on
+```
 
-You can see pipeline on 3 screenshot, where we building our application
+After all this configuration we can do SSH from Clinet_1 to Client_2  and reverse 
 
-2.	Your pipeline structure should contain 2 stages. 1st – build, create zip archieve, and publish an artifact. 2nd – download an artifact and deploy it to azure app service 
+7. Налаштуйте на Server_1 firewall таким чином:
+  • Дозволено підключатись через SSH з Client_1 та заборонено з Client_2
+  
+  We can add Ip from CLient_1 to this file 
+  ```
+  vi /etc/hosts.deny 
+  ```
+  
+  For instance we can block 22 port and it will block the ability to connect via SSH or turn off ssh service 
+  ```
+  systemctl disable ssh
+  ```
 
-![Savchuk Dmytro](2.7.png "Container and state file")
+  • З Client_2 на 172.17.D+10.1 ping проходив, а на 172.17.D+20.1 не проходив
+  
+  Same as on previous step we can just add Ip range to hosts.deny file and it will resolve our issue
+  ```
+  vi /etc/hosts.deny 
+  ```
+8. . Якщо в п.3 була налаштована маршрутизація для доступу Client_1 та Client_2 до мережі Інтернет – видалити відповідні записи. На Server_1 налаштувати NAT сервіс таким чином, щоб з Client_1 та Client_2 проходив ping в мережу Інтернет
 
-3.	To deploy .zip to app service use azure app service deployment task
-
-Same on previous script, separate job for dpeloyment application to app service 
-
-# Service connection 
-
-![Savchuk Dmytro](2.8.png "Container and state file")
+![Savchuk Dmytro](8.png "NAT")
