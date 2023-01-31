@@ -52,18 +52,18 @@ systemctl enable ssh --now
  dnf install firewalld
 ```
 
-## Check if firewalld is running
+- Check if firewalld is running
 firewall-cmd --state
 running
 
-## If the above command returns 'not running' then you can start the service using:
+- If the above command returns 'not running' then you can start the service using:
 systemctl start firewalld
 
-## Get your default zone
+- Get your default zone
 firewall-cmd --get-default-zone
 public
 
-## Get the list of interfaces part of your active zone
+- Get the list of interfaces part of your active zone
 firewall-cmd --get-active-zones
 public
   interfaces: enp0s3 enp0s8
